@@ -94,21 +94,74 @@ const getAllReservations = function (guest_id, limit = 10) {
 
 /**
  * Get all properties.
- * @param {{}} options An object containing query options.
+ * @param {{ owner_id: number, minimum_price_per_night: number, maximum_price_per_night: number, minimum_rating: number, city: string }} options An object containing query options.
  * @param {*} limit The number of results to return.
  * @return {Promise<[{}]>}  A promise to the properties.
  */
-const getAllProperties = (options, limit = 10) => {
-    return pool
-    .query(`SELECT * FROM properties LIMIT $1`, [limit])
-    .then((result) => {
-      console.log(result.rows);
-      return result.rows;
-    })
+const getAllProperties = function (options, limit = 10) {
+    const queryParams = [];
+  
+    let queryString = `
+      SELECT properties.*, AVG(property_reviews.rating) AS average_rating
+      FROM properties
+      JOIN property_reviews ON properties.id = property_id
+    `;
+  
+    const whereConditions = [];
+  
+    if (options.city) {
+      queryParams.push(`%${options.city}%`);
+      whereConditions.push(`city LIKE $${queryParams.length}`);
+    }
+  
+    if (options.owner_id) {
+      queryParams.push(options.owner_id);
+      whereConditions.push(`owner_id = $${queryParams.length}`);
+    }
+  
+    if (options.minimum_price_per_night) {
+      const minPriceInCents = options.minimum_price_per_night * 100;
+      queryParams.push(minPriceInCents);
+      whereConditions.push(`cost_per_night >= $${queryParams.length}`);
+    }
+  
+    if (options.maximum_price_per_night) {
+      const maxPriceInCents = options.maximum_price_per_night * 100;
+      queryParams.push(maxPriceInCents);
+      whereConditions.push(`cost_per_night <= $${queryParams.length}`);
+    }
+  
+    if (options.minimum_rating) {
+      queryParams.push(options.minimum_rating);
+      whereConditions.push(`property_reviews.rating >= $${queryParams.length}`);
+    }
+  
+    if (whereConditions.length > 0) {
+      queryString += `WHERE ${whereConditions.join(' AND ')} `;
+    }
+  
+    queryParams.push(limit);
+
+    console.log('Query:', queryString);
+    console.log('Params:', queryParams);
+
+    queryString += `
+      GROUP BY properties.id
+      ORDER BY cost_per_night
+      LIMIT $${queryParams.length};
+    `;
+  
+  return pool
+    .query(queryString, queryParams)
+    .then((result) => result.rows)
     .catch((err) => {
-      console.log(err.message);
+      console.error('Error executing query', err.stack);
+      throw err;
     });
 };
+  
+  
+
 /**
  * Add a property to the database
  * @param {{}} property An object containing all of the property details.
