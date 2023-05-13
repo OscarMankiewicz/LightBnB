@@ -18,14 +18,15 @@ const pool = new Pool({
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithEmail = function (email) {
-  let resolvedUser = null;
-  for (const userId in users) {
-    const user = users[userId];
-    if (user?.email.toLowerCase() === email?.toLowerCase()) {
-      resolvedUser = user;
-    }
-  }
-  return Promise.resolve(resolvedUser);
+    const query = {
+        text: 'SELECT * FROM users WHERE email = $1',
+        values: [email]
+    };
+
+    return pool
+    .query(query)
+    .then(result => result.rows[0] || null)
+    .catch(err => console.error('Error exectuting query', err.stack));
 };
 
 /**
@@ -34,8 +35,16 @@ const getUserWithEmail = function (email) {
  * @return {Promise<{}>} A promise to the user.
  */
 const getUserWithId = function (id) {
-  return Promise.resolve(users[id]);
-};
+    const query = {
+      text: 'SELECT * FROM users WHERE id = $1',
+      values: [id]
+    };
+  
+    return pool
+    .query(query)
+    .then(result => result.rows[0] || null)
+    .catch(err => console.error('Error executing query', err.stack));
+  };
 
 /**
  * Add a new user to the database.
@@ -43,10 +52,15 @@ const getUserWithId = function (id) {
  * @return {Promise<{}>} A promise to the user.
  */
 const addUser = function (user) {
-  const userId = Object.keys(users).length + 1;
-  user.id = userId;
-  users[userId] = user;
-  return Promise.resolve(user);
+    const query = {
+      text: 'INSERT INTO users (name, email, password) VALUES ($1, $2, $3) RETURNING *',
+      values: [user.name, user.email, user.password]
+    };
+  
+    return pool
+    .query(query)
+    .then(result => result.rows[0])
+    .catch(err => console.error('Error executing query', err.stack));
 };
 
 /// Reservations
@@ -73,7 +87,6 @@ const getAllProperties = (options, limit = 10) => {
   return pool
     .query(`SELECT * FROM properties LIMIT $1`, [limit])
     .then((result) => {
-      console.log(result.rows);
       return result.row;
     })
     .catch((err) => {
